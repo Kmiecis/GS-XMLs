@@ -7,8 +7,12 @@ class StringRef {
     return this.value;
   }
 
+  setValue(value) {
+    this.value = value;
+  }
+
   replace(substr, newSubstr) {
-    this.value.replace(substr, newSubstr);
+    this.value = this.value.replace(substr, newSubstr);
   }
 }
 
@@ -23,8 +27,8 @@ class XmlElement {
     this.attributes.push([ name, value ]);
   }
 
-  addSubelement(subelement) {
-    this.subelements.push(subelement);
+  addSubelement(name, value) {
+    this.subelements.push([ name, value ]);
   }
 
   getName() {
@@ -84,22 +88,20 @@ class XmlElement {
 
 function getWidth(data, rowIndex, columnIndex, maxWidth) {
   var result = columnIndex;
-  var value = data[rowIndex][result++];
-  while (value != "" && result < maxWidth) {
-    value = data[rowIndex][result++];
+  while (result < maxWidth && data[rowIndex][result] != "") {
+    result++;
   }
   return result - columnIndex;
 }
 
 function getHeight(data, rowIndex, columnIndex, maxHeight) {
   var result = rowIndex;
-  var value = data[result++][columnIndex];
-  while (value != "" && result < maxHeight) {
-    value = data[result++][columnIndex];
+  while (result < maxHeight && data[result][columnIndex] != "") {
+    result++;
   }
   return result - rowIndex;
 }
-
+// TODO: read only values != "" ?
 function readVerticalValues(data, rowIndex, columnIndex, height) {
   var values = new Array(height);
   for (var r = 0; r < height; ++r) {
@@ -116,9 +118,9 @@ function readElementMap(data, rowIndex, width, height) {
   elementMap[elementName] = names;
 
   for (var c = 1; c < width; ++c) {
-    var elementRef = data[rowIndex][c];
+    var elementValue = data[rowIndex][c];
     var values = this.readVerticalValues(data, rowIndex + 1, c, height - 1);
-    elementMap[elementRef] = values;
+    elementMap[elementValue] = values;
   }
 
   return elementMap;
@@ -131,18 +133,15 @@ function readElementsMap(data, width, height) {
   while (rowIndex < height) {
     var elementWidth = this.getWidth(data, rowIndex, 0, width);
     var elementHeight = this.getHeight(data, rowIndex, 0, height);
-    if (rowIndex == 0) { // Temp hack...
-      elementHeight -= 1;
-    }
     var elementName = data[rowIndex][0];
     elementsMap[elementName] = this.readElementMap(data, rowIndex, elementWidth, elementHeight);
-    rowIndex += elementHeight;
+    rowIndex += (1 + elementHeight);
   }
 
   return elementsMap;
 }
 
-function readXmlsMap(elementsMap) {
+function getXmlsMap(elementsMap) {
   var xmlsMap = {};
 
   for (var elementName in elementsMap) {
@@ -157,6 +156,10 @@ function readXmlsMap(elementsMap) {
     xmlsMap[elementName] = xmlMap;
   }
 
+  return xmlsMap;
+}
+
+function fillXmlsMap(xmlsMap, elementsMap) {
   for (var elementName in elementsMap) {
     var elementMap = elementsMap[elementName];
     var xmlMap = xmlsMap[elementName];
@@ -172,16 +175,10 @@ function readXmlsMap(elementsMap) {
       for (var i = 0; i < names.length; ++i) {
         var name = names[i];
         var value = values[i];
-
+        
         if (value != "") {
-          var subXmlMap = xmlsMap[name];
-          if (subXmlMap != null) {
-            var subXml = subXmlMap[value];
-            if (subXml != null) {
-              xml.addSubelement(subXml);
-            } else {
-              xml.addAttribute(name, value);
-            }
+          if (name in elementsMap && value in elementsMap[name]) {
+            xml.addSubelement(name, value);
           } else {
             xml.addAttribute(name, value);
           }
@@ -189,8 +186,117 @@ function readXmlsMap(elementsMap) {
       }
     }
   }
+}
 
-  return xmlsMap;
+function getStringsMap(xmlsMap) {
+  var stringsMap = {};
+
+  for (var elementName in xmlsMap) {
+    var xmlMap = xmlsMap[elementName];
+    var stringMap = {};
+    for (var elementValue in xmlMap) {
+      var xml = xmlMap[elementValue];
+
+      var name = xml.getName();
+      var attributes = xml.getAttributes();
+      var subelements = xml.getSubelements();
+
+      var stringValue = "";
+      stringValue += "<" + name;
+      for (var i = 0; i < attributes.length; ++i) {
+        var attribute = attributes[i];
+        stringValue += " " + attribute[0] + "=\"" + attribute[1] + "\"";
+      }
+      if (subelements.length > 0) {
+        stringValue += ">\n";
+        for (var i = 0; i < subelements.length; ++i) {
+          stringValue += "{" + i + "}\n";
+        }
+        stringValue += "</" + name + ">";
+      } else {
+        stringValue += "/>"
+      }
+
+      var stringRef = new StringRef(stringValue);
+      stringMap[elementValue] = stringRef;
+    }
+    stringsMap[elementName] = stringMap;
+  }
+
+  return stringsMap;
+}
+// TODO: remove duplicated values && implement reordering method if already set order is higher than it should be
+function getDepthStack(elementsMap) {
+  var nameToOrderMap = {};
+  var stack = [];
+
+  for (var elementName in elementsMap) {
+    var elementMap = elementsMap[elementName];
+    var names = elementMap[elementName];
+
+    for (var elementValue in elementMap) {
+      if (elementValue == elementName) {
+        continue;
+      }
+      var values = elementMap[elementValue];
+
+      if (!(elementName in nameToOrderMap)) {
+        nameToOrderMap[elementName] = 0;
+      }
+      var order = nameToOrderMap[elementName];
+      
+      while (stack.length <= order) {
+        stack.push([]);
+      }
+      stack[order].push([ elementName, elementValue ]);
+
+      for (var i = 0; i < names.length; ++i) {
+        var name = names[i];
+        var value = values[i];
+
+        if (name in elementsMap && value in elementsMap[name]) {
+
+          if (!(name in nameToOrderMap)) {
+            nameToOrderMap[name] = order + 1;
+          }
+          var suborder = nameToOrderMap[name];
+
+          while (stack.length <= suborder) {
+            stack.push([]);
+          }
+          stack[suborder].push([ name, value ]);
+        }
+      }
+    }
+  }
+
+  return stack;
+}
+
+function fillStringsMap(xmlsMap, stringsMap, depthStack) {
+  for (var i = depthStack.length - 1; i > -1; --i) {
+    var pairs = depthStack[i];
+    for (var j = 0; j < pairs.length; ++j) {
+      var pair = pairs[j];
+      var name = pair[0];
+      var value = pair[1];
+
+      var stringRef = stringsMap[name][value];
+      var xml = xmlsMap[name][value];
+
+      var stringValue = stringRef.getValue();
+      var subelements = xml.getSubelements();
+      for (var k = 0; k < subelements.length; ++k) {
+        var subelement = subelements[k];
+        var subname = subelement[0];
+        var subvalue = subelement[1];
+
+        var subStringRef = stringsMap[subname][subvalue];
+        stringValue = stringValue.replace("{" + k + "}", subStringRef.getValue());
+      }
+      stringRef.setValue(stringValue);
+    }
+  }
 }
 
 function toXmlDocument() {
@@ -208,9 +314,13 @@ function toXmlDocument() {
   var elementName = activeSheet.getRange(rowIndex, 1).getValue();
   var elementValue = activeRange.getValue();
 
-  var xmlsMap = this.readXmlsMap(elementsMap);
-  var xmlRoot = xmlsMap[elementName][elementValue];
-  var result = xmlRoot.toString();
+  var xmlsMap = this.getXmlsMap(elementsMap);
+  this.fillXmlsMap(xmlsMap, elementsMap);
+  var stringsMap = this.getStringsMap(xmlsMap);
+  var depthStack = this.getDepthStack(elementsMap);
+  this.fillStringsMap(xmlsMap, stringsMap, depthStack);
+
+  var result = stringsMap[elementName][elementValue].getValue();
   return result;
   var xmlDocument = XmlService.createDocument(xmlRoot);
   return xmlDocument;
