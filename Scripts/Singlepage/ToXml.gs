@@ -42,48 +42,6 @@ class XmlElement {
   getSubelements() {
     return this.subelements;
   }
-
-  toString() {
-    var result = "";
-    var stack = [];
-    stack.push([ this.name, this.attributes, this.subelements ]);
-    while (stack.length > 0) {
-      var item = stack.pop();
-
-      var name = item[0];
-      var attributes = item[1];
-      var subelements = item[2];
-
-      result += "<" + name;
-      for (var i = 0; i < attributes.length; ++i) {
-        var attribute = attributes[i];
-        var attributeName = attribute[0];
-        var attributeValue = attribute[1];
-        result += " " + attributeName + "=\"" + attributeValue + "\"";
-      }
-      if (subelements.length > 0) {
-        result += ">\n";
-        for (var i = subelements.length - 1; i > -1; --i) {
-          var subelement = subelements[i];
-          stack.push([ subelement.getName(), subelement.getAttributes(), subelement.getSubelements() ]);
-        }
-        var endelement = stack[stack.length - subelements.length];
-        for (var i = 3; i < item.length; ++i) {
-          var endname = item[i];
-          endelement.push(endname);
-        }
-        endelement.push(name);
-      } else {
-        result += "/>\n";
-
-        for (var i = item.length - 1; i > 2; --i) {
-          var endname = item[i];
-          result += "</" + endname + ">\n";
-        }
-      }
-    }
-    return result;
-  }
 }
 
 function getWidth(data, rowIndex, columnIndex, maxWidth) {
@@ -225,8 +183,42 @@ function getStringsMap(xmlsMap) {
 
   return stringsMap;
 }
+
+function getDepthStack(elementsMap, rootName, rootValue) {
+  var stack = [[[rootName, rootValue]]];
+  var order = 0;
+
+  while (order < stack.length) {
+    var prev = stack[order];
+    var next = [];
+    for (var i = 0; i < prev.length; ++i) {
+      var pair = prev[i];
+      var elementName = pair[0];
+      var elementValue = pair[1];
+
+      var elementMap = elementsMap[elementName];
+      var names = elementMap[elementName];
+      var values = elementMap[elementValue];
+      for (var j = 0; j < names.length; ++j) {
+        var name = names[j];
+        var value = values[j];
+
+        if (name in elementsMap && value in elementsMap[name]) {
+          next.push([name, value]);
+        }
+      }
+    }
+    if (next.length > 0) {
+      stack.push(next);
+    }
+    order++;
+  }
+
+  return stack;
+}
+
 // TODO: remove duplicated values && implement reordering method if already set order is higher than it should be
-function getDepthStack(elementsMap) {
+/*function getDepthStack(elementsMap) {
   var nameToOrderMap = {};
   var stack = [];
 
@@ -244,57 +236,60 @@ function getDepthStack(elementsMap) {
         nameToOrderMap[elementName] = 0;
       }
       var order = nameToOrderMap[elementName];
+      var suborder = order + 1;
       
-      while (stack.length <= order) {
-        stack.push([]);
+      while (stack.length <= suborder) {
+        stack.push({});
       }
-      stack[order].push([ elementName, elementValue ]);
+      var ordered = stack[order];
+      if (!(elementName in ordered)) {
+        ordered[elementName] = new Set();
+      }
+      ordered[elementName].add(elementValue);
 
       for (var i = 0; i < names.length; ++i) {
         var name = names[i];
         var value = values[i];
 
         if (name in elementsMap && value in elementsMap[name]) {
-
-          if (!(name in nameToOrderMap)) {
-            nameToOrderMap[name] = order + 1;
+          var subordered = stack[suborder];
+          if (!(name in subordered)) {
+            subordered[name] = new Set();
           }
-          var suborder = nameToOrderMap[name];
-
-          while (stack.length <= suborder) {
-            stack.push([]);
-          }
-          stack[suborder].push([ name, value ]);
+          subordered[name].add(value);
         }
       }
     }
   }
 
   return stack;
-}
+}*/
 
 function fillStringsMap(xmlsMap, stringsMap, depthStack) {
   for (var i = depthStack.length - 1; i > -1; --i) {
-    var pairs = depthStack[i];
-    for (var j = 0; j < pairs.length; ++j) {
-      var pair = pairs[j];
+    var ordered = depthStack[i];
+    for (var j = 0; j < ordered.length; ++j) {
+      var pair = ordered[j];
       var name = pair[0];
       var value = pair[1];
+    //for (var name in ordered) {
+      //var values = ordered[name];
+      //for (var value of values) {
+        var stringRef = stringsMap[name][value];
+        var xml = xmlsMap[name][value];
 
-      var stringRef = stringsMap[name][value];
-      var xml = xmlsMap[name][value];
+        var stringValue = stringRef.getValue();
+        var subelements = xml.getSubelements();
+        for (var k = 0; k < subelements.length; ++k) {
+          var subelement = subelements[k];
+          var subname = subelement[0];
+          var subvalue = subelement[1];
 
-      var stringValue = stringRef.getValue();
-      var subelements = xml.getSubelements();
-      for (var k = 0; k < subelements.length; ++k) {
-        var subelement = subelements[k];
-        var subname = subelement[0];
-        var subvalue = subelement[1];
-
-        var subStringRef = stringsMap[subname][subvalue];
-        stringValue = stringValue.replace("{" + k + "}", subStringRef.getValue());
-      }
-      stringRef.setValue(stringValue);
+          var subStringRef = stringsMap[subname][subvalue];
+          stringValue = stringValue.replace("{" + k + "}", subStringRef.getValue());
+        }
+        stringRef.setValue(stringValue);
+      //}
     }
   }
 }
@@ -311,13 +306,13 @@ function toXmlDocument() {
   var elementsMap = this.readElementsMap(data, width, height);
 
   var rowIndex = activeRange.getRowIndex();
-  var elementName = activeSheet.getRange(rowIndex, 1).getValue();
-  var elementValue = activeRange.getValue();
+  var elementName = "model";// activeSheet.getRange(rowIndex, 1).getValue();
+  var elementValue = "ref1";// activeRange.getValue();
 
   var xmlsMap = this.getXmlsMap(elementsMap);
   this.fillXmlsMap(xmlsMap, elementsMap);
   var stringsMap = this.getStringsMap(xmlsMap);
-  var depthStack = this.getDepthStack(elementsMap);
+  var depthStack = this.getDepthStack(elementsMap, elementName, elementValue);
   this.fillStringsMap(xmlsMap, stringsMap, depthStack);
 
   var result = stringsMap[elementName][elementValue].getValue();
