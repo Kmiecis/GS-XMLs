@@ -1,17 +1,17 @@
 class XmlFromSheets {
   static asString(sheets) {
+    var rootSheet = sheets[0];
+    var rootName = rootSheet.getName();
+    var rootValue = "";
+
     var sheetsMap = this.createSheetsMap(sheets);
     var elementsMap = this.createElementsMap(sheetsMap);
     var xmlsMap = this.createXmlsMap(elementsMap);
-
-    var rootSheet = sheets[0];
-    var rootName = rootSheet.getName();
-
-    var depthStack = this.getDepthStack(xmlsMap, rootName);
+    var depthStack = this.createDepthStack(xmlsMap, rootName);
     var stringsMap = this.createStringsMap(xmlsMap, depthStack);
 
     const XML_HEADER = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
-    return XML_HEADER + stringsMap[rootName][""].getValue();
+    return XML_HEADER + stringsMap[rootName][rootValue].getValue();
   }
 
   static createSheetsMap(sheets) {
@@ -44,13 +44,16 @@ class XmlFromSheets {
 
   static createElementMap(name, data) {
     var elementMap = {};
-    if (data[0][0] == "") {
-      this.fillElementMapHorizontally(elementMap, name, data);
-    } else {
-      this.fillElementMapVertically(elementMap, name, data);
-    }
-    
+    this.fillElementMap(elementMap, name, data);
     return elementMap;
+  }
+
+  static fillElementMap(elementMap, name, data) {
+    if (data[0][0].includes(':')) {
+      this.fillElementMapVertically(elementMap, name, data);
+    } else {
+      this.fillElementMapHorizontally(elementMap, name, data);
+    }
   }
 
   static fillElementMapVertically(elementMap, name, data) {
@@ -64,6 +67,14 @@ class XmlFromSheets {
     }
   }
 
+  static readValuesVertically(data, column) {
+    var values = new Array(data.length - 1);
+    for (var i = 0; i < values.length; ++i) {
+      values[i] = data[i + 1][column];
+    }
+    return values;
+  }
+
   static fillElementMapHorizontally(elementMap, name, data) {
     var height = data.length;
     var names = this.readValuesHorizontally(data, 0);
@@ -73,14 +84,6 @@ class XmlFromSheets {
       var values = this.readValuesHorizontally(data, r);
       elementMap[value] = values;
     }
-  }
-
-  static readValuesVertically(data, column) {
-    var values = new Array(data.length - 1);
-    for (var i = 0; i < values.length; ++i) {
-      values[i] = data[i + 1][column];
-    }
-    return values;
   }
 
   static readValuesHorizontally(data, row) {
@@ -138,7 +141,7 @@ class XmlFromSheets {
     }
   }
 
-  static getDepthStack(xmlsMap, rootName) {
+  static createDepthStack(xmlsMap, rootName) {
     var stack = [[[rootName, ""]]];
     var order = 0;
 

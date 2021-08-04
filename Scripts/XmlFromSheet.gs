@@ -1,27 +1,25 @@
 class XmlFromSheet {
   static asString(sheet) {
-    var activeRange = sheet.getActiveRange();
-    var rowIndex = activeRange.getRowIndex();
-    var rootName = sheet.getRange(rowIndex, 1).getValue();
-    var rootValue = activeRange.getValue();
+    var rootName = sheet.getRange(1, 1).getValue();
+    var rootValue = sheet.getRange(2, 1).getValue();
 
-    var range = sheet.getDataRange();
-    var data = range.getValues();
-    
-    var elementsMap = this.createElementsMap(data);  
+    var elementsMap = this.createElementsMap(sheet);  
     var xmlsMap = this.createXmlsMap(elementsMap);
-    var depthStack = this.getDepthStack(xmlsMap, rootName, rootValue);
+    var depthStack = this.createDepthStack(xmlsMap, rootName, rootValue);
     var stringsMap = this.createStringsMap(xmlsMap, depthStack);
-    return stringsMap[rootName][rootValue].getValue();
+
+    const XML_HEADER = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+    return XML_HEADER + stringsMap[rootName][rootValue].getValue();
   }
 
-  static createElementsMap(data) {
+  static createElementsMap(sheet) {
     var elementsMap = {};
-    this.fillElementsMap(elementsMap, data);
+    this.fillElementsMap(elementsMap, sheet);
     return elementsMap;
   }
 
-  static fillElementsMap(elementsMap, data) {
+  static fillElementsMap(elementsMap, sheet) {
+    var data = sheet.getDataRange().getValues();
     var height = data.length;
     var width = data[0].length;
 
@@ -33,22 +31,6 @@ class XmlFromSheet {
       elementsMap[elementName] = this.createElementMap(data, rowIndex, elementWidth, elementHeight);
       rowIndex += (1 + elementHeight);
     }
-  }
-  
-  static createElementMap(data, rowIndex, width, height) {
-    var elementMap = {};
-    var elementName = data[rowIndex][0];
-
-    var names = this.readVerticalValues(data, rowIndex + 1, 0, height - 1);
-    elementMap[elementName] = names;
-
-    for (var c = 1; c < width; ++c) {
-      var elementValue = data[rowIndex][c];
-      var values = this.readVerticalValues(data, rowIndex + 1, c, height - 1);
-      elementMap[elementValue] = values;
-    }
-
-    return elementMap;
   }
 
   static getDataWidth(data, rowIndex, columnIndex, maxWidth) {
@@ -66,19 +48,51 @@ class XmlFromSheet {
     }
     return result - rowIndex;
   }
+  
+  static createElementMap(data, rowIndex, width, height) {
+    var elementMap = {};
+    this.fillElementMapHorizontally(elementMap, data, rowIndex, width, height);
+    return elementMap;
+  }
 
-  static readHorizontalValues(data, rowIndex, columnIndex, width) {
-    var values = new Array(width);
-    for (var c = 0; c < width; ++c) {
-      values[c] = data[rowIndex][columnIndex + c];
+  static fillElementMapVertically(elementMap, data, rowIndex, width, height) {
+    var elementName = data[rowIndex][0];
+
+    var names = this.readVerticalValues(data, rowIndex + 1, 0, height - 1);
+    elementMap[elementName] = names;
+
+    for (var c = 1; c < width; ++c) {
+      var elementValue = data[rowIndex][c];
+      var values = this.readVerticalValues(data, rowIndex + 1, c, height - 1);
+      elementMap[elementValue] = values;
     }
-    return values;
   }
 
   static readVerticalValues(data, rowIndex, columnIndex, height) {
     var values = new Array(height);
     for (var r = 0; r < height; ++r) {
       values[r] = data[rowIndex + r][columnIndex];
+    }
+    return values;
+  }
+
+  static fillElementMapHorizontally(elementMap, data, rowIndex, width, height) {
+    var elementName = data[rowIndex][0];
+
+    var names = this.readHorizontalValues(data, rowIndex, 1, width - 1);
+    elementMap[elementName] = names;
+
+    for (var r = 1; r < height; ++r) {
+      var elementValue = data[rowIndex + r][0];
+      var values = this.readHorizontalValues(data, rowIndex + r, 1, width - 1);
+      elementMap[elementValue] = values;
+    }
+  }
+
+  static readHorizontalValues(data, rowIndex, columnIndex, width) {
+    var values = new Array(width);
+    for (var c = 0; c < width; ++c) {
+      values[c] = data[rowIndex][columnIndex + c];
     }
     return values;
   }
@@ -133,7 +147,7 @@ class XmlFromSheet {
     }
   }
 
-  static getDepthStack(xmlsMap, rootName, rootValue) {
+  static createDepthStack(xmlsMap, rootName, rootValue) {
     var stack = [[[rootName, rootValue]]];
     var order = 0;
 
