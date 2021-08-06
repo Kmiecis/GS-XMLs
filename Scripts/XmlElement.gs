@@ -45,63 +45,17 @@ class XmlElement {
     }
   }
 
+  areElementsEqual(leftElement, rightElement) {
+    return (
+      leftElement[0] === rightElement[0] &&
+      leftElement[1] === rightElement[1]
+    );
+  }
+
   equals(other) {
-    return this.areAttributesEqual(other.getAttributes()) && this.areChildrenEqual(other.getChildren());
-  }
-
-  areAttributesEqual(otherAttributes) {
-    var thisAttributes = this.attributes;
-
-    if (thisAttributes.length != otherAttributes.length) {
-      return false;
-    }
-    var length = thisAttributes.length;
-
-    var matches = true;
-    for (var i = 0; i < length && matches; ++i) {
-      var thisAttribute = thisAttributes[i];
-      var thisAttributeName = thisAttribute[0];
-      var thisAttributeValue = thisAttribute[1];
-
-      var found = false;
-      for (var j = 0; j < length && !found; ++j) {
-        var otherAttribute = otherAttributes[j];
-        var otherAttributeName = otherAttribute[0];
-        var otherAttributeValue = otherAttribute[1];
-
-        found = thisAttributeName == otherAttributeName && thisAttributeValue == otherAttributeValue;
-      }
-      matches = found;
-    }
-
-    return matches;
-  }
-
-  areChildrenEqual(otherChildren) {
-    var thisChildren = this.children;
-
-    if (thisChildren.length != otherChildren.length) {
-      return false;
-    }
-    var length = thisChildren.length;
-
-    var matches = true;
-    for (var i = 0; i < length && matches; ++i) {
-      var thisChild = thisChildren[i];
-      var thisChildName = thisChild[0];
-      var thisChildValue = thisChild[1];
-
-      var found = false;
-      for (var j = 0; j < length && !found; ++j) {
-        var otherChild = otherChildren[j];
-        var otherChildName = otherChild[0];
-        var otherChildValue = otherChild[1];
-
-        found = thisChildName === otherChildName && thisChildValue === otherChildValue;
-      }
-      matches = found;
-    }
-
-    return matches;
+    return (
+      ArrayUtils.areEqualsUnordered(this.getAttributes(), other.getAttributes(), this.areElementsEqual) &&
+      ArrayUtils.areEqualsUnordered(this.getChildren(), other.getChildren(), this.areElementsEqual)
+    );
   }
 }

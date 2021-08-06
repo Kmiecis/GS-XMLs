@@ -1,5 +1,5 @@
 class SheetFromXml {
-  static fillSheet(document) {
+  static fillSheet(sheet, document) {
     var rootXml = document.getRootElement();
     var rootName = rootXml.getName();
     var rootValue = "ref0";
@@ -11,8 +11,7 @@ class SheetFromXml {
     this.trimXmlsMap(xmlsMap, invXmlsMap, depthStack);
 
     var elementsMap = this.createElementsMap(xmlsMap);
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    this.parseToSpreadsheet(spreadsheet, elementsMap);
+    this.parseToSheet(sheet, elementsMap);
   }
 
   static createXmlsMap(rootXml, rootValue) {
@@ -157,6 +156,7 @@ class SheetFromXml {
 
           if (xml.equals(otherXml)) {
             var references = invXmlMap[otherValue];
+            var x = xml.equals(otherXml);
             for (var r = 0; r < references.length; ++r) {
               var reference = references[r];
               var refName = reference[0];
@@ -299,8 +299,7 @@ class SheetFromXml {
     }
   }
 
-  static parseToSpreadsheet(spreadsheet, elementsMap) {
-    var sheet = spreadsheet.getActiveSheet();
+  static parseToSheet(sheet, elementsMap) {
     this.parseToSheetVertically(sheet, elementsMap);
   }
 
@@ -390,6 +389,8 @@ class SheetFromXml {
 
         rowsOffset += 1;
       }
+      
+      namesRowsOffset = rowsOffset;
       rowsOffset += 1;
     }
 
@@ -405,13 +406,12 @@ class SheetFromXml {
       var elementMap = elementsMap[name];
 
       var names = elementMap[name];
-      columns = Math.max(columns, names.length);
+      columns = Math.max(columns, 1 + names.length);
 
       rows += 1;
       for (var value in elementMap) {
         rows += 1;
       }
-      rows += 1;
     }
     rows -= 1;
 
